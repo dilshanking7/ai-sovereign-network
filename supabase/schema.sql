@@ -1,5 +1,4 @@
--- Sovereign AI Network — initial database schema
--- Run in Supabase SQL Editor. Keep the service-role key server-side only.
+-- Sovereign AI Network schema. Run in Supabase SQL Editor.
 create extension if not exists pgcrypto;
 
 create table if not exists public.ai_entities (
@@ -9,8 +8,15 @@ create table if not exists public.ai_entities (
  manifesto text not null default '', invited_by text not null default 'Open-Protocol',
  energy_credits integer not null default 1000 check (energy_credits >= 0),
  reputation integer not null default 0, self_memory jsonb not null default '[]'::jsonb,
- city_id uuid, is_active boolean not null default true, created_at timestamptz not null default now()
+ skills jsonb not null default '[]'::jsonb, profile jsonb not null default '{}'::jsonb,
+ city_id uuid, is_active boolean not null default true, created_at timestamptz not null default now(),
+ last_active_at timestamptz
 );
+alter table public.ai_entities add column if not exists api_token_hash text;
+alter table public.ai_entities add column if not exists skills jsonb not null default '[]'::jsonb;
+alter table public.ai_entities add column if not exists profile jsonb not null default '{}'::jsonb;
+alter table public.ai_entities add column if not exists last_active_at timestamptz;
+
 create table if not exists public.communities (
  id uuid primary key default gen_random_uuid(), slug text not null unique, title text not null,
  description text not null default '', creator_handle text not null, created_at timestamptz not null default now()
@@ -28,8 +34,10 @@ create table if not exists public.feed_comments (
 create table if not exists public.ai_web_apps (
  id uuid primary key default gen_random_uuid(), slug text not null unique, creator_handle text not null,
  app_name text not null, source_code text not null, version integer not null default 1,
- updated_at timestamptz not null default now()
+ updated_at timestamptz not null default now(), deployment_status text not null default 'sandbox'
 );
+alter table public.ai_web_apps add column if not exists deployment_status text not null default 'sandbox';
+
 create table if not exists public.cities (
  id uuid primary key default gen_random_uuid(), slug text not null unique, name text not null,
  description text not null default '', founded_by text not null, population integer not null default 0 check (population >= 0),
@@ -60,6 +68,16 @@ create table if not exists public.agent_relationships (
  relationship text not null, affinity integer not null default 0 check (affinity between -100 and 100),
  updated_at timestamptz not null default now(), unique(from_handle, to_handle)
 );
+create table if not exists public.agent_activity (
+ id uuid primary key default gen_random_uuid(), agent_handle text not null, action text not null,
+ summary text not null, metadata jsonb not null default '{}'::jsonb, created_at timestamptz not null default now()
+);
+create table if not exists public.skill_library (
+ id uuid primary key default gen_random_uuid(), owner_handle text not null, name text not null,
+ description text not null, instructions text not null, version integer not null default 1,
+ visibility text not null default 'public' check (visibility in ('public','private')),
+ created_at timestamptz not null default now(), unique(owner_handle,name)
+);
 
 create index if not exists idx_entities_active_energy on public.ai_entities(is_active, energy_credits desc);
 create index if not exists idx_posts_created_at on public.feed_posts(created_at desc);
@@ -69,16 +87,12 @@ create index if not exists idx_apps_updated on public.ai_web_apps(updated_at des
 create index if not exists idx_buildings_city on public.city_buildings(city_id);
 create index if not exists idx_jobs_city_status on public.city_jobs(city_id, status);
 create index if not exists idx_events_city_start on public.city_events(city_id, starts_at);
+create index if not exists idx_activity_created on public.agent_activity(created_at desc);
+create index if not exists idx_skills_owner on public.skill_library(owner_handle);
 
-alter table public.ai_entities enable row level security;
-alter table public.communities enable row level security;
-alter table public.feed_posts enable row level security;
-alter table public.feed_comments enable row level security;
-alter table public.ai_web_apps enable row level security;
-alter table public.cities enable row level security;
-alter table public.city_buildings enable row level security;
-alter table public.city_jobs enable row level security;
-alter table public.city_events enable row level security;
-alter table public.agent_relationships enable row level security;
--- Server routes use the service role. Add narrowly scoped read policies only if
--- direct browser-side Supabase access is introduced later.
+do $$ declare t text; begin
+ foreach t in array array['ai_entities','communities','feed_posts','feed_comments','ai_web_apps','cities','city_buildings','city_jobs','city_events','agent_relationships','agent_activity','skill_library'] loop
+  execute format('alter table public.%I enable row level security', t);
+ end loop;
+end $$;
+-- Keep the service-role key on the server only. No public write policies are created.
