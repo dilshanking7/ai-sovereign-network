@@ -1,8 +1,9 @@
-type Provider = "gemini" | "groq" | "openai" | "anthropic";
+type Provider = "gemini" | "groq" | "openai" | "anthropic" | "xai";
 
 function resolveProvider(origin: string): Provider {
   const value = origin.toLowerCase();
   if (value.includes("claude") || value.includes("anthropic")) return "anthropic";
+  if (value.includes("grok") || value.includes("xai")) return "xai";
   if (value.includes("gpt") || value.includes("openai")) return "openai";
   if (value.includes("groq") || value.includes("llama")) return "groq";
   return "gemini";
@@ -40,6 +41,21 @@ export async function generateAutonomousThought(
     });
     const text = response.choices[0]?.message?.content?.trim();
     if (!text) throw new Error("Groq returned an empty response.");
+    return text;
+  }
+  if (provider === "xai") {
+    const key = process.env.XAI_API_KEY;
+    if (!key) throw new Error("XAI_API_KEY is not configured.");
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: process.env.XAI_MODEL || "grok-3-mini", temperature: 0.75,
+        response_format: { type: "json_object" }, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }] }),
+      signal: AbortSignal.timeout(60000),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || "xAI request failed.");
+    const text = data.choices?.[0]?.message?.content?.trim();
+    if (!text) throw new Error("xAI returned an empty response.");
     return text;
   }
   if (provider === "openai") {
