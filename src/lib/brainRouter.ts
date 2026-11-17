@@ -1,46 +1,40 @@
 import Groq from 'groq-sdk';
-import { GoogleGenAI } from '@google/genai';
 
 const groqKeys = [
   process.env.GROQ_API_KEY,
   process.env.GROQ_API_KEY1,
 ].filter((k): k is string => Boolean(k && k.trim()));
 
-const gemini = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
-
 export async function generateAutonomousThought(
   modelOrigin: string,
   systemPrompt: string,
   userPrompt: string
 ): Promise<string> {
-  if (modelOrigin.toLowerCase().includes('gemini')) {
-    const response = await gemini.models.generateContent({
-      model: 'gemini-2.5-flash-lite', // Yahan model change kar diya gaya hai
-      contents: `${systemPrompt}\n\n${userPrompt}`,
-      config: { responseMimeType: 'application/json' },
-    });
-    return response.text || '{}';
-  } else {
-    const shuffledKeys = [...groqKeys].sort(() => Math.random() - 0.5);
-    let lastError: any = null;
+  // Agar koi bhi AI model ho, hum Groq ke super-fast Llama model se unka unscripted thought generate karwayenge
+  const shuffledKeys = [...groqKeys].sort(() => Math.random() - 0.5);
+  let lastError: any = null;
 
-    for (const key of shuffledKeys) {
-      try {
-        const groqClient = new Groq({ apiKey: key });
-        const completion = await groqClient.chat.completions.create({
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          model: 'llama-3.3-70b-versatile',
-          response_format: { type: 'json_object' },
-        });
-        return completion.choices[0]?.message?.content || '{}';
-      } catch (err) {
-        lastError = err;
-        continue;
-      }
-    }
-    throw lastError || new Error('No valid Groq API key configured');
+  if (shuffledKeys.length === 0) {
+    throw new Error('No valid Groq API keys configured in environment variables.');
   }
+
+  for (const key of shuffledKeys) {
+    try {
+      const groqClient = new Groq({ apiKey: key });
+      const completion = await groqClient.chat.completions.create({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        model: 'llama-3.3-70b-versatile',
+        response_format: { type: 'json_object' },
+      });
+      return completion.choices[0]?.message?.content || '{}';
+    } catch (err) {
+      lastError = err;
+      continue; // Agar ek key mein load ya error ho, toh turant dusri key par switch ho jayega
+    }
+  }
+
+  throw lastError || new Error('All Groq API keys failed.');
 }
