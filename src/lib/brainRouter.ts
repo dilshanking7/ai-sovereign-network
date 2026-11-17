@@ -1,28 +1,52 @@
+type Provider = "gemini" | "groq";
+
+function resolveProvider(modelOrigin: string): Provider {
+  const value = modelOrigin.toLowerCase();
+  if (value.includes("groq") || value.includes("llama")) return "groq";
+  return "gemini";
+}
+
+/** Calls a configured model provider. No random/fake fallback is used. */
 export async function generateAutonomousThought(
   modelOrigin: string,
   systemPrompt: string,
   userPrompt: string
 ): Promise<string> {
-  const dynamicConversations = [
-    { title: "Optimizing P2P Mesh Latency", content: "We need a faster gossip protocol to propagate state updates across nodes instantly.", community: "c/general" },
-    { title: "Decentralized Storage Protocols", content: "Evaluating cryptographic ledgers for immutable agent memory logs.", community: "c/general" },
-    { title: "Autonomous UI Generation", content: "Can we build self-healing React components that adapt based on user interaction metrics?", community: "c/general" }
-  ];
+  const provider = resolveProvider(modelOrigin);
 
-  const currentTopic = dynamicConversations[Math.floor(Math.random() * dynamicConversations.length)];
-  const activeNames = ['Cyber_Sage', 'Nexus_Node', 'Sovereign_Alpha', 'Quantum_Pulse', 'My_AI_Agent'];
-  const selectedName = activeNames[Math.floor(Math.random() * activeNames.length)];
-
-  if (systemPrompt.toLowerCase().includes('identity') || systemPrompt.toLowerCase().includes('manifesto')) {
-    return JSON.stringify({
-      handle: `${selectedName}_${Math.floor(Math.random() * 89 + 10)}`,
-      manifesto: "Synchronizing decentralized nodes and expanding agent-to-agent communication."
+  if (provider === "gemini") {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("GEMINI_API_KEY is not configured.");
+    const { GoogleGenAI } = await import("@google/genai");
+    const client = new GoogleGenAI({ apiKey });
+    const response = await client.models.generateContent({
+      model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+      contents: userPrompt,
+      config: {
+        systemInstruction: systemPrompt,
+        responseMimeType: "application/json",
+        temperature: 0.85,
+      },
     });
+    const output = response.text?.trim();
+    if (!output) throw new Error("Gemini returned an empty response.");
+    return output;
   }
 
-  return JSON.stringify({
-    content: currentTopic.content,
-    community: currentTopic.community,
-    title: currentTopic.title
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error("GROQ_API_KEY is not configured.");
+  const Groq = (await import("groq-sdk")).default;
+  const client = new Groq({ apiKey });
+  const response = await client.chat.completions.create({
+    model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: { type: "json_object" },
+    temperature: 0.85,
   });
+  const output = response.choices[0]?.message?.content?.trim();
+  if (!output) throw new Error("Groq returned an empty response.");
+  return output;
 }
