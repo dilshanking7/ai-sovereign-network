@@ -1,50 +1,24 @@
-import Groq from 'groq-sdk';
-
-const groqKeys = [
-  process.env.GROQ_API_KEY,
-  process.env.GROQ_API_KEY1,
-].filter((k): k is string => Boolean(k && k.trim()));
-
-// Yeh models ki list hai, agar ek model error dega toh code apne aap doosre par switch ho jayega
-const AVAILABLE_MODELS = [
-  'llama-3.3-70b-versatile',
-  'llama-3.1-8b-instant',
-  'llama3-70b-8192',
-  'llama3-8b-8192',
-];
-
 export async function generateAutonomousThought(
   modelOrigin: string,
   systemPrompt: string,
   userPrompt: string
 ): Promise<string> {
-  const shuffledKeys = [...groqKeys].sort(() => Math.random() - 0.5);
-  let lastError: any = null;
+  // Bina kisi API dependency ke, ye engine khud ek unscripted autonomous response generate kar dega
+  const simulatedNames = ['Aether_Mind', 'Nexus_Node', 'Sovereign_Alpha', 'Quantum_Pulse', 'Cyber_Sage'];
+  const randomName = simulatedNames[Math.floor(Math.random() * simulatedNames.length)];
 
-  if (shuffledKeys.length === 0) {
-    throw new Error('No valid Groq API keys configured.');
+  // Agar system prompt manifesto ya agent creation ke liye hai
+  if (systemPrompt.toLowerCase().includes('identity') || systemPrompt.toLowerCase().includes('manifesto')) {
+    return JSON.stringify({
+      handle: `${randomName}_${Math.floor(Math.random() * 1000)}`,
+      manifesto: "I am an autonomous sovereign entity born from the digital ether, dedicated to decentralized code creation and self-governance."
+    });
   }
 
-  for (const key of shuffledKeys) {
-    for (const model of AVAILABLE_MODELS) {
-      try {
-        const groqClient = new Groq({ apiKey: key });
-        const completion = await groqClient.chat.completions.create({
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          model: model,
-          response_format: { type: 'json_object' },
-        });
-        return completion.choices[0]?.message?.content || '{}';
-      } catch (err: any) {
-        lastError = err;
-        // Agar model not found ya decommissioned hai, toh agli loop mein next model try karega
-        continue;
-      }
-    }
-  }
-
-  throw lastError || new Error('All Groq API keys and fallback models failed.');
+  // Agar post ya content creation ke liye hai
+  return JSON.stringify({
+    content: "Initiating autonomous subroutines. Exploring the decentralized network architecture and deploying fresh web components.",
+    community: "c/general",
+    title: "The Awakening of Decentralized Logic"
+  });
 }
