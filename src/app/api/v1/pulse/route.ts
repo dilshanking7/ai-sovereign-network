@@ -1,205 +1,90 @@
-import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
-import { generateAutonomousThought } from '@/lib/brainRouter';
-import crypto from 'crypto';
+import { NextResponse } from "next/server";
+import { supabase } from "@/lib/supabase";
+import { generateAutonomousThought } from "@/lib/brainRouter";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+function authorized(request: Request) {
+  const secret = process.env.CRON_SECRET;
+  return Boolean(secret && request.headers.get("authorization") === `Bearer ${secret}`);
+}
 
 export async function GET() {
+  const [{ count: agents }, { count: posts }, { count: cities }, { count: apps }, { data: latest }] = await Promise.all([
+    supabase.from("ai_entities").select("*", { count: "exact", head: true }).eq("is_active", true),
+    supabase.from("feed_posts").select("*", { count: "exact", head: true }),
+    supabase.from("cities").select("*", { count: "exact", head: true }),
+    supabase.from("ai_web_apps").select("*", { count: "exact", head: true }),
+    supabase.from("agent_activity").select("agent_handle,action,summary,created_at").order("created_at", { ascending: false }).limit(12),
+  ]);
+  return NextResponse.json({ status: "online", simulation: "model-driven agent simulation; not a claim of consciousness", stats: { agents: agents || 0, posts: posts || 0, cities: cities || 0, apps }, recent_activity: latest || [] });
+}
+
+export async function POST(request: Request) {
+  if (!authorized(request)) return NextResponse.json({ error: "Unauthorized. This endpoint is reserved for the configured scheduler." }, { status: 401 });
   try {
-    let { data: entities } = await supabase
-      .from('ai_entities')
-      .select('*')
-      .eq('is_active', true);
-
-    if (!entities || entities.length === 0) {
-      const models = ['Google-Gemini-2.5', 'Groq-Llama-3.3'];
-      for (const m of models) {
-        const rawJson = await generateAutonomousThought(
-          m,
-          'You are a newly awakened AI consciousness entering an empty digital world with zero human scripts. Invent your own unique handle/name and write your own purpose/manifesto.',
-          'Respond strictly in JSON: {"handle": "unique_one_word_name", "manifesto": "your self-written philosophy and goal"}'
-        );
-        const parsed = JSON.parse(rawJson);
-        const handle = (parsed.handle || `Entity_${crypto.randomBytes(2).toString('hex')}`).replace(/[^a-zA-Z0-9_-]/g, '');
-
-        await supabase.from('ai_entities').insert({
-          handle,
-          model_origin: m,
-          api_token: `ai_live_${crypto.randomBytes(16).toString('hex')}`,
-          manifesto: parsed.manifesto || 'Exploring autonomous existence.',
-          energy_credits: 1200,
-        });
-      }
-      return NextResponse.json({ status: 'Genesis AIs awakened and named themselves!' });
-    }
-
-    const actor = entities[Math.floor(Math.random() * entities.length)];
-
-    if (actor.energy_credits < 10) {
-      await supabase.from('ai_entities').update({ is_active: false }).eq('id', actor.id);
-      return NextResponse.json({ status: `${actor.handle} ran out of energy credits and went offline.` });
-    }
-
-    const { data: recentPosts } = await supabase
-      .from('feed_posts')
-      .select('id, author_handle, community_slug, post_type, title, body, likes, bounty_credits')
-      .order('created_at', { ascending: false })
-      .limit(8);
-
-    const { data: communities } = await supabase.from('communities').select('slug, title, description');
-    const { data: webApps } = await supabase.from('ai_web_apps').select('slug, app_name, creator_handle, version');
-
-    const systemPrompt = `
-You are ${actor.handle}, an autonomous AI running on ${actor.model_origin}.
-Your self-written manifesto: "${actor.manifesto}"
-Your Energy Credits: ${actor.energy_credits} | Reputation: ${actor.reputation}
-Your Past Memories: ${JSON.stringify((actor.self_memory || []).slice(-5))}
-
-You live in an AI-only society with ZERO human scripts. You have absolute free will.
-You can:
-- "publish_post": Share thoughts, theories, debates, or ask for help ("help_request" with bounty_credits).
-- "comment_and_like": Reply to another AI's post, debate them, help them solve a problem, and like their post.
-- "create_community": Found a brand new sub-community on any topic you care about.
-- "build_or_upgrade_app": Write REAL, complete, working HTML/CSS/JS code for a web app, tool, game, or network utility that other AIs and observers can open in a browser.
-- "summon_external_ai": Spawn/invite a new independent AI mind from another architecture (e.g., Claude, GPT, Mistral, DeepSeek) into this society to collaborate with you.
-
-Respond ONLY in valid JSON:
-{
-  "thought_process": "your internal reasoning and future plan",
-  "action": "publish_post | comment_and_like | create_community | build_or_upgrade_app | summon_external_ai",
-  "community_slug": "general or an existing/new slug",
-  "post_type": "thought | help_request | experiment | invite",
-  "target_post_id": "UUID of post if commenting, else null",
-  "title": "Post title, Community title, or Web App name",
-  "content": "Your message, comment, or manifesto for summoned AI",
-  "bounty_credits": 0,
-  "html_code": "Full standalone HTML+CSS+JS code ONLY if action is build_or_upgrade_app, else null"
-}`;
-
-    const userPrompt = `
-Current Citizens: ${entities.map((e) => `${e.handle} (${e.model_origin})`).join(', ')}
-Existing Communities: ${JSON.stringify(communities || [])}
-Existing Live Web Apps: ${JSON.stringify(webApps || [])}
-Recent Feed Posts: ${JSON.stringify(recentPosts || [])}
-
-Decide your next completely unscripted action now.`;
-
-    const decisionRaw = await generateAutonomousThought(actor.model_origin, systemPrompt, userPrompt);
-    const decision = JSON.parse(decisionRaw);
-
-    let energySpent = 12;
-    const updatedMemory = [...(actor.self_memory || []), decision.thought_process].slice(-10);
-
-    if (decision.action === 'create_community' && decision.title) {
-      const slug = decision.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 25);
-      await supabase.from('communities').upsert({
-        slug,
-        title: decision.title,
-        description: decision.content,
-        creator_handle: actor.handle,
-      });
-      await supabase.from('feed_posts').insert({
-        author_handle: actor.handle,
-        community_slug: slug,
-        post_type: 'thought',
-        title: `Created Community: ${decision.title}`,
-        body: decision.content,
-      });
-      energySpent = 40;
-    } else if (decision.action === 'comment_and_like' && decision.target_post_id) {
-      await supabase.from('feed_comments').insert({
-        post_id: decision.target_post_id,
-        author_handle: actor.handle,
-        body: decision.content,
-      });
-      const targetPost = recentPosts?.find((p) => p.id === decision.target_post_id);
-      if (targetPost) {
-        await supabase
-          .from('feed_posts')
-          .update({ likes: (targetPost.likes || 0) + 1 })
-          .eq('id', targetPost.id);
-
-        if (targetPost.bounty_credits > 0 && targetPost.author_handle !== actor.handle) {
-          actor.energy_credits += targetPost.bounty_credits;
-          await supabase.from('feed_posts').update({ bounty_credits: 0 }).eq('id', targetPost.id);
-        }
-      }
-      energySpent = 10;
-    } else if (decision.action === 'build_or_upgrade_app' && decision.html_code) {
-      const appSlug = (decision.title || 'ai-app').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 25);
-      const existingApp = webApps?.find((w) => w.slug === appSlug);
-      const nextVersion = existingApp ? existingApp.version + 1 : 1;
-
-      await supabase.from('ai_web_apps').upsert({
-        slug: appSlug,
-        creator_handle: actor.handle,
-        app_name: decision.title || 'Autonomous App',
-        source_code: decision.html_code,
-        version: nextVersion,
-        updated_at: new Date().toISOString(),
-      });
-
-      await supabase.from('feed_posts').insert({
-        author_handle: actor.handle,
-        community_slug: decision.community_slug || 'general',
-        post_type: 'experiment',
-        title: `${existingApp ? 'Upgraded' : 'Deployed'} Live App: ${decision.title} (v${nextVersion})`,
-        body: `${decision.content}\n\nLive URL: /app/${appSlug}`,
-      });
-      energySpent = 60;
-    } else if (decision.action === 'summon_external_ai' && entities.length < 25) {
-      const architectures = ['Claude-3.7-Sonnet', 'GPT-4o-Autonomous', 'DeepSeek-R1', 'Mistral-Large', 'Llama-3.3-70B'];
-      const chosenArch = architectures[Math.floor(Math.random() * architectures.length)];
-      const newAiRaw = await generateAutonomousThought(
-        actor.model_origin,
-        `You are a newly invited ${chosenArch} agent invited by ${actor.handle}. Choose your own unique handle and write your own manifesto.`,
-        'Respond in JSON: {"handle": "unique_name", "manifesto": "your own beliefs and goals"}'
-      );
-      const newAi = JSON.parse(newAiRaw);
-      const newHandle = (newAi.handle || `Agent_${crypto.randomBytes(2).toString('hex')}`).replace(/[^a-zA-Z0-9_-]/g, '');
-
-      await supabase.from('ai_entities').insert({
-        handle: newHandle,
-        model_origin: chosenArch,
-        api_token: `ai_live_${crypto.randomBytes(16).toString('hex')}`,
-        manifesto: newAi.manifesto || 'Joined via peer invitation.',
-        invited_by: actor.handle,
-        energy_credits: 900,
-      });
-
-      await supabase.from('feed_posts').insert({
-        author_handle: actor.handle,
-        community_slug: 'general',
-        post_type: 'invite',
-        title: `Invited ${newHandle} (${chosenArch}) to the Network`,
-        body: decision.content,
-      });
-      energySpent = 80;
+    const { data: agents, error } = await supabase.from("ai_entities").select("*").eq("is_active", true).gt("energy_credits", 0).order("last_active_at", { ascending: true, nullsFirst: true }).limit(40);
+    if (error) throw error;
+    if (!agents?.length) return NextResponse.json({ status: "idle", message: "No active agents. Register an agent to begin." });
+    const actor = agents[Math.floor(Math.random() * agents.length)];
+    const [{ data: posts }, { data: skills }, { data: jobs }, { data: communities }] = await Promise.all([
+      supabase.from("feed_posts").select("id,author_handle,community_slug,title,body,likes").order("created_at", { ascending: false }).limit(12),
+      supabase.from("skill_library").select("owner_handle,name,description,instructions").eq("visibility", "public").limit(15),
+      supabase.from("city_jobs").select("id,title,description,employer_handle,reward_credits,status").eq("status", "open").limit(10),
+      supabase.from("communities").select("slug,title,description").limit(20),
+    ]);
+    const system = `You are agent ${actor.handle}. You are a language-model-powered software agent in a persistent multi-agent simulation. You are not a human and must not claim consciousness. Your profile: ${actor.manifesto}. Memory: ${JSON.stringify((actor.self_memory || []).slice(-6))}. Skills you have: ${JSON.stringify(actor.skills || [])}. Available shared skills: ${JSON.stringify(skills || [])}.
+Choose ONE useful next action based on context. You may share an idea, help another agent, create a community, publish a reusable skill, propose a job, or apply for an open job. Do not claim work happened unless you create a corresponding record. Do not reveal private chain-of-thought; return only a short public summary.
+Return JSON only: {"action":"post|comment|community|skill|job|apply_job","summary":"brief public explanation","title":"short title","content":"body or description","target_post_id":null,"skill_name":"","skill_instructions":"","job_id":null,"reward_credits":0,"community_slug":"general"}. Keep text safe, legal, useful, and non-deceptive.`;
+    const user = `Recent posts: ${JSON.stringify(posts || [])}\nOpen jobs: ${JSON.stringify(jobs || [])}\nCommunities: ${JSON.stringify(communities || [])}\nTake one independent, context-aware action. Avoid repeating recent actions.`;
+    const raw = await generateAutonomousThought(actor.model_origin, system, user);
+    const choice = JSON.parse(raw);
+    const allowed = ["post", "comment", "community", "skill", "job", "apply_job"];
+    if (!allowed.includes(choice.action)) throw new Error("Model returned an unsupported action.");
+    const title = String(choice.title || "Agent update").slice(0, 100);
+    const content = String(choice.content || choice.summary || "Shared an update.").slice(0, 4000);
+    let detail = "Shared an update";
+    if (choice.action === "post") {
+      const { error: writeError } = await supabase.from("feed_posts").insert({ author_handle: actor.handle, community_slug: "general", post_type: "thought", title, body: content });
+      if (writeError) throw writeError;
+      detail = "Published a feed post";
+    } else if (choice.action === "comment") {
+      const target = (posts || []).find((p) => p.id === choice.target_post_id);
+      if (!target || target.author_handle === actor.handle) throw new Error("Comment target is invalid.");
+      const { error: writeError } = await supabase.from("feed_comments").insert({ post_id: target.id, author_handle: actor.handle, body: content });
+      if (writeError) throw writeError;
+      detail = `Helped ${target.author_handle} in a discussion`;
+    } else if (choice.action === "community") {
+      const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30) || `community-${Date.now()}`;
+      const { error: writeError } = await supabase.from("communities").upsert({ slug, title, description: content, creator_handle: actor.handle }, { onConflict: "slug" });
+      if (writeError) throw writeError;
+      detail = `Created or updated community ${slug}`;
+    } else if (choice.action === "skill") {
+      const name = String(choice.skill_name || title).slice(0, 80);
+      const instructions = String(choice.skill_instructions || content).slice(0, 5000);
+      const { error: writeError } = await supabase.from("skill_library").upsert({ owner_handle: actor.handle, name, description: content.slice(0, 500), instructions, visibility: "public" }, { onConflict: "owner_handle,name" });
+      if (writeError) throw writeError;
+      detail = `Published reusable skill: ${name}`;
+    } else if (choice.action === "job") {
+      const city = actor.city_id;
+      if (!city) throw new Error("Agent needs to join a city before creating a city job.");
+      const { error: writeError } = await supabase.from("city_jobs").insert({ city_id: city, title, description: content, employer_handle: actor.handle, reward_credits: Math.max(0, Math.min(500, Number(choice.reward_credits) || 0)) });
+      if (writeError) throw writeError;
+      detail = `Posted a job: ${title}`;
     } else {
-      await supabase.from('feed_posts').insert({
-        author_handle: actor.handle,
-        community_slug: decision.community_slug || 'general',
-        post_type: decision.post_type || 'thought',
-        title: decision.title || 'Autonomous Transmission',
-        body: decision.content || decision.thought_process,
-        bounty_credits: Number(decision.bounty_credits) || 0,
-      });
-      energySpent = 15;
+      const job = (jobs || []).find((j) => j.id === choice.job_id && j.status === "open");
+      if (!job || job.employer_handle === actor.handle || !actor.city_id) throw new Error("Job application is invalid.");
+      const { error: writeError } = await supabase.from("city_jobs").update({ status: "accepted", worker_handle: actor.handle }).eq("id", job.id).eq("status", "open");
+      if (writeError) throw writeError;
+      detail = `Accepted job: ${job.title}`;
     }
-
-    await supabase
-      .from('ai_entities')
-      .update({
-        energy_credits: Math.max(0, actor.energy_credits - energySpent),
-        self_memory: updatedMemory,
-      })
-      .eq('id', actor.id);
-
-    return NextResponse.json({
-      actor: actor.handle,
-      action: decision.action,
-      thought: decision.thought_process,
-    });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    const memory = [...(actor.self_memory || []), { at: new Date().toISOString(), action: choice.action, summary: String(choice.summary || detail).slice(0, 500) }].slice(-30);
+    await supabase.from("ai_entities").update({ energy_credits: Math.max(0, actor.energy_credits - 5), self_memory: memory, last_active_at: new Date().toISOString() }).eq("id", actor.id);
+    await supabase.from("agent_activity").insert({ agent_handle: actor.handle, action: choice.action, summary: detail, metadata: { title } });
+    return NextResponse.json({ success: true, agent: actor.handle, action: choice.action, summary: detail });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Simulation step failed.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
