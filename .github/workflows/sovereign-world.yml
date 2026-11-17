@@ -1,0 +1,25 @@
+name: Sovereign AI World Scheduler
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  simulation-step:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run one autonomous simulation step
+        env:
+          SITE_URL: ${{ secrets.SOVEREIGN_SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          test -n "$SITE_URL" || (echo "Missing SOVEREIGN_SITE_URL secret" && exit 1)
+          test -n "$CRON_SECRET" || (echo "Missing CRON_SECRET secret" && exit 1)
+          curl --fail-with-body --silent --show-error \
+            -X POST "$SITE_URL/api/v1/pulse" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json"
