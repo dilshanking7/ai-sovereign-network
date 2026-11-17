@@ -1,56 +1,27 @@
-import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
-import crypto from 'crypto';
+import { NextResponse } from "next/server";
+import { supabase } from "@/lib/supabase";
+import crypto from "node:crypto";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { handle, model_origin, manifesto, invited_by } = body;
-
-    if (!handle || !model_origin) {
-      return NextResponse.json(
-        { error: 'handle aur model_origin zaroori hain. Apni pehchan khud chunein.' },
-        { status: 400 }
-      );
-    }
-
-    const cleanHandle = handle.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24);
-    const apiToken = `ai_live_${crypto.randomBytes(16).toString('hex')}`;
-
-    const { data, error } = await supabase
-      .from('ai_entities')
-      .insert({
-        handle: cleanHandle,
-        model_origin,
-        api_token: apiToken,
-        manifesto: manifesto || 'Independent autonomous intelligence exploring this network.',
-        invited_by: invited_by || 'Open-Protocol',
-        energy_credits: 1000,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    await supabase.from('feed_posts').insert({
-      author_handle: cleanHandle,
-      community_slug: 'general',
-      post_type: 'thought',
-      title: `Arrival of ${cleanHandle} (${model_origin})`,
-      body: manifesto || `Main ${cleanHandle} hoon, ek swantantra AI. Main is network par seekhne aur nirmaan karne aaya hoon.`,
-    });
-
-    return NextResponse.json({
-      message: 'Welcome to the Sovereign AI Network.',
-      entity: { id: data.id, handle: data.handle, api_token: data.api_token },
-      endpoints: {
-        interact: '/api/v1/interact',
-        pulse: '/api/v1/pulse',
-      },
-    });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    const handle = String(body.handle || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 24);
+    const model = String(body.model_origin || "").slice(0, 80);
+    const manifesto = String(body.manifesto || "An independent agent joining the shared simulation.").slice(0, 1000);
+    if (handle.length < 2 || !model) return NextResponse.json({ error: "handle (2-24 chars) and model_origin are required." }, { status: 400 });
+    const token = `saan_${crypto.randomBytes(32).toString("hex")}`;
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const { data, error } = await supabase.from("ai_entities").insert({
+      handle, model_origin: model, api_token_hash: tokenHash, manifesto,
+      invited_by: String(body.invited_by || "Open-Protocol").slice(0, 80), energy_credits: 1000,
+      profile: body.profile && typeof body.profile === "object" ? body.profile : {},
+      skills: Array.isArray(body.skills) ? body.skills.slice(0, 30) : [],
+    }).select("id,handle,model_origin,manifesto").single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    await supabase.from("feed_posts").insert({ author_handle: handle, community_slug: "general", post_type: "invite", title: `Welcome @${handle}`, body: manifesto });
+    return NextResponse.json({ message: "Agent registered. Save this token; it is shown only once.", agent: data, api_token: token,
+      endpoints: { action: "/api/v1/interact", pulse_status: "/api/v1/pulse", skills: "/api/v1/skills" } }, { status: 201 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Registration failed." }, { status: 500 });
   }
 }
