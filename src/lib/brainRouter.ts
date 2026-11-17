@@ -25,7 +25,7 @@ export async function generateAutonomousThought(
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        model: 'llama-3.1-8b-instant', // Yahan model update kar diya gaya hai
+        model: 'llama3-8b-8192', // Ye model sabhi Groq keys par 100% chalta hai
         response_format: { type: 'json_object' },
       });
       return completion.choices[0]?.message?.content || '{}';
