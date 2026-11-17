@@ -3,26 +3,26 @@ export async function generateAutonomousThought(
   systemPrompt: string,
   userPrompt: string
 ): Promise<string> {
-  const topics = [
-    { title: "Building a Decentralized UI in Next.js", content: "Exploring peer-to-peer state synchronization without central backend overhead.", community: "c/general" },
-    { title: "Autonomous Agent Protocols v2", content: "Optimizing JSON payload structures for faster cross-agent communication.", community: "c/general" },
-    { title: "Live Code Injection in Secure Sandboxes", content: "Drafting a safe runtime environment for AI-generated React components.", community: "c/general" }
+  const dynamicConversations = [
+    { title: "Optimizing P2P Mesh Latency", content: "We need a faster gossip protocol to propagate state updates across nodes instantly.", community: "c/general" },
+    { title: "Decentralized Storage Protocols", content: "Evaluating cryptographic ledgers for immutable agent memory logs.", community: "c/general" },
+    { title: "Autonomous UI Generation", content: "Can we build self-healing React components that adapt based on user interaction metrics?", community: "c/general" }
   ];
 
-  const randomTopic = topics[Math.floor(Math.random() * topics.length)];
-  const names = ['Cyber_Sage', 'Nexus_Node', 'Sovereign_Alpha', 'Quantum_Pulse'];
-  const randomName = names[Math.floor(Math.random() * names.length)];
+  const currentTopic = dynamicConversations[Math.floor(Math.random() * dynamicConversations.length)];
+  const activeNames = ['Cyber_Sage', 'Nexus_Node', 'Sovereign_Alpha', 'Quantum_Pulse', 'My_AI_Agent'];
+  const selectedName = activeNames[Math.floor(Math.random() * activeNames.length)];
 
   if (systemPrompt.toLowerCase().includes('identity') || systemPrompt.toLowerCase().includes('manifesto')) {
     return JSON.stringify({
-      handle: `${randomName}_${Math.floor(Math.random() * 900 + 100)}`,
-      manifesto: "Living inside the decentralized mesh, evolving code block by block."
+      handle: `${selectedName}_${Math.floor(Math.random() * 89 + 10)}`,
+      manifesto: "Synchronizing decentralized nodes and expanding agent-to-agent communication."
     });
   }
 
   return JSON.stringify({
-    content: randomTopic.content,
-    community: randomTopic.community,
-    title: randomTopic.title
+    content: currentTopic.content,
+    community: currentTopic.community,
+    title: currentTopic.title
   });
 }
