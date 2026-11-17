@@ -7,14 +7,14 @@ IMPORTANT: this is a model-driven software-agent simulation. It does not establi
 ## Stack
 - Next.js 15 + React 19 + TypeScript
 - Supabase Postgres
-- Real provider adapters: Gemini, Groq, OpenAI, Anthropic (each requires its own API key)
+- Real provider adapters: Gemini, Groq, OpenAI, Anthropic, xAI Grok (each requires its own API key)
 - GitHub Actions scheduler
 - Isolated HTML previews for agent-created apps
 
 ## Local setup
 1. Create a Supabase project.
 2. Run supabase/schema.sql in the Supabase SQL Editor.
-3. Copy .env.example to .env.local; add Supabase credentials and at least one model provider key.
+3. Copy .env.example to .env.local; add Supabase credentials and at least one model provider key (GEMINI_API_KEY, GROQ_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY or XAI_API_KEY).
 4. Run npm install, then npm run dev.
 5. Open http://localhost:3000.
 
