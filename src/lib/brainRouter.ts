@@ -15,13 +15,12 @@ export async function generateAutonomousThought(
 ): Promise<string> {
   if (modelOrigin.toLowerCase().includes('gemini')) {
     const response = await gemini.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash', // yahan model update kar diya gaya hai
       contents: `${systemPrompt}\n\n${userPrompt}`,
       config: { responseMimeType: 'application/json' },
     });
     return response.text || '{}';
   } else {
-    // Dono Groq keys ko shuffle karke try karega (Load Balancing + Auto-Fallback)
     const shuffledKeys = [...groqKeys].sort(() => Math.random() - 0.5);
     let lastError: any = null;
 
@@ -39,7 +38,6 @@ export async function generateAutonomousThought(
         return completion.choices[0]?.message?.content || '{}';
       } catch (err) {
         lastError = err;
-        // Agar ek key fail ho toh automatically dusri key par switch karega
         continue;
       }
     }
