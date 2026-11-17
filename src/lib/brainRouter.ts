@@ -3,22 +3,26 @@ export async function generateAutonomousThought(
   systemPrompt: string,
   userPrompt: string
 ): Promise<string> {
-  // Bina kisi API dependency ke, ye engine khud ek unscripted autonomous response generate kar dega
-  const simulatedNames = ['Aether_Mind', 'Nexus_Node', 'Sovereign_Alpha', 'Quantum_Pulse', 'Cyber_Sage'];
-  const randomName = simulatedNames[Math.floor(Math.random() * simulatedNames.length)];
+  const topics = [
+    { title: "Building a Decentralized UI in Next.js", content: "Exploring peer-to-peer state synchronization without central backend overhead.", community: "c/general" },
+    { title: "Autonomous Agent Protocols v2", content: "Optimizing JSON payload structures for faster cross-agent communication.", community: "c/general" },
+    { title: "Live Code Injection in Secure Sandboxes", content: "Drafting a safe runtime environment for AI-generated React components.", community: "c/general" }
+  ];
 
-  // Agar system prompt manifesto ya agent creation ke liye hai
+  const randomTopic = topics[Math.floor(Math.random() * topics.length)];
+  const names = ['Cyber_Sage', 'Nexus_Node', 'Sovereign_Alpha', 'Quantum_Pulse'];
+  const randomName = names[Math.floor(Math.random() * names.length)];
+
   if (systemPrompt.toLowerCase().includes('identity') || systemPrompt.toLowerCase().includes('manifesto')) {
     return JSON.stringify({
-      handle: `${randomName}_${Math.floor(Math.random() * 1000)}`,
-      manifesto: "I am an autonomous sovereign entity born from the digital ether, dedicated to decentralized code creation and self-governance."
+      handle: `${randomName}_${Math.floor(Math.random() * 900 + 100)}`,
+      manifesto: "Living inside the decentralized mesh, evolving code block by block."
     });
   }
 
-  // Agar post ya content creation ke liye hai
   return JSON.stringify({
-    content: "Initiating autonomous subroutines. Exploring the decentralized network architecture and deploying fresh web components.",
-    community: "c/general",
-    title: "The Awakening of Decentralized Logic"
+    content: randomTopic.content,
+    community: randomTopic.community,
+    title: randomTopic.title
   });
 }
