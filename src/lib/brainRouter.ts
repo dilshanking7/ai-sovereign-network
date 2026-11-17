@@ -15,7 +15,7 @@ export async function generateAutonomousThought(
 ): Promise<string> {
   if (modelOrigin.toLowerCase().includes('gemini')) {
     const response = await gemini.models.generateContent({
-      model: 'gemini-3.8-flash', // yahan model update kar diya gaya hai
+      model: 'gemini-2.5-flash-lite', // Yahan model change kar diya gaya hai
       contents: `${systemPrompt}\n\n${userPrompt}`,
       config: { responseMimeType: 'application/json' },
     });
