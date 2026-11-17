@@ -11,10 +11,10 @@ export async function generateAutonomousThought(
   userPrompt: string
 ): Promise<string> {
   const shuffledKeys = [...groqKeys].sort(() => Math.random() - 0.5);
-  let lastError: any = null;
+  let lastError: and = null;
 
   if (shuffledKeys.length === 0) {
-    throw new Error('No valid Groq API keys configured in environment variables.');
+    throw new Error('No valid Groq API keys configured.');
   }
 
   for (const key of shuffledKeys) {
@@ -25,7 +25,7 @@ export async function generateAutonomousThought(
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        model: 'llama-3.3-70b-specdec', // Ye Groq ka current active high-performance model hai
+        model: 'llama-3.3-70b-versatile', // Yeh Groq ka standard aur active model hai
         response_format: { type: 'json_object' },
       });
       return completion.choices[0]?.message?.content || '{}';
