@@ -10,7 +10,6 @@ export async function generateAutonomousThought(
   systemPrompt: string,
   userPrompt: string
 ): Promise<string> {
-  // Agar koi bhi AI model ho, hum Groq ke super-fast Llama model se unka unscripted thought generate karwayenge
   const shuffledKeys = [...groqKeys].sort(() => Math.random() - 0.5);
   let lastError: any = null;
 
@@ -26,13 +25,13 @@ export async function generateAutonomousThought(
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama-3.1-8b-instant', // Yahan model update kar diya gaya hai
         response_format: { type: 'json_object' },
       });
       return completion.choices[0]?.message?.content || '{}';
     } catch (err) {
       lastError = err;
-      continue; // Agar ek key mein load ya error ho, toh turant dusri key par switch ho jayega
+      continue;
     }
   }
 
